@@ -97,7 +97,7 @@ const HomePage = () => {
   
   // NOVO ESTADO DE MODAL para exibir o QR Code PIX
   const [showPixModal, setShowPixModal] = useState(false);
-  const [pixData, setPixData] = useState({ encodedImage: '', payload: '' });
+  const [pixData, setPixData] = useState({ encodedImage: '', payload: '', totalValue: 0, freteValue: 0 }); // Atualizado para incluir valores
 
   // NOVO ESTADO DE MODAL: Formulário de Cartão de Crédito
   const [showCreditCardModal, setShowCreditCardModal] = useState(false);
@@ -112,6 +112,8 @@ const HomePage = () => {
   // NOVO ESTADO: Polling de Status de Pagamento
   // ====================================================================
   const [isPollingPaymentStatus, setIsPollingPaymentStatus] = useState(false);
+  // NOVO ESTADO: Armazena o ID do registro de pagamento para Polling de Produto
+  const [productPaymentId, setProductPaymentId] = useState(null);
 
 
   const [selectedProduct, setSelectedProduct] = useState(null);
@@ -128,6 +130,8 @@ const HomePage = () => {
     cpf: "",
     phone: "",
     address: "",
+    // NOVO: Adicionado campo de CEP para frete de produto
+    postalCode: "", 
   });
   const [buyerData, setBuyerData] = useState(clearBuyerData());
 
@@ -153,7 +157,7 @@ const HomePage = () => {
   const fetchProfessors = async () => {
     setIsLoadingProfessors(true);
     try {
-      const response = await axios.get("http://localhost:3000/getProfessor");
+      const response = await axios.get("https://backendagenda-paf6.onrender.com/getProfessor");
       setProfessors(response.data.professors || []);
     } catch (err) {
       console.error("Erro ao buscar professores:", err);
@@ -168,7 +172,7 @@ const HomePage = () => {
     setIsLoadingPackages(true);
     try {
       // Ajustado o endpoint para /getPackages conforme solicitado
-      const response = await axios.get("http://localhost:3000/getPackages"); 
+      const response = await axios.get("https://backendagenda-paf6.onrender.com/getPackages"); 
       setPackages(response.data || []); // Assumindo que a rota retorna o array de pacotes diretamente
     } catch (err) {
       console.error("Erro ao buscar pacotes:", err);
@@ -183,7 +187,7 @@ const HomePage = () => {
   const fetchProducts = async () => {
     setIsLoadingProducts(true);
     try {
-      const response = await axios.get("http://localhost:3000/getProducts");
+      const response = await axios.get("https://backendagenda-paf6.onrender.com/getProducts");
       setProducts(response.data.products || []);
     } catch (err) {
       console.error("Erro ao buscar produtos:", err);
@@ -217,69 +221,83 @@ const HomePage = () => {
     let intervalId = null;
 
     if (isPollingPaymentStatus) {
-      // Pega o nome do comprador do estado ATUAL
-      const buyerName = buyerData.name;
+      
+      const isProfessorFlow = !!selectedProfessor;
+      const pollingData = { name: buyerData.name }; // Padrão: usa o nome do comprador
 
-      if (!buyerName) {
-        console.error("Polling de pagamento iniciado, mas o nome do comprador está vazio.");
+      // Lógica de Polling para PIX de AULA
+      if (isProfessorFlow) {
+        if (!pollingData.name) {
+            console.error("Polling de pagamento iniciado, mas o nome do comprador está vazio.");
+            setIsPollingPaymentStatus(false);
+            return;
+        }
+
+      // Lógica de Polling para PIX de PRODUTO
+      } else if (productPaymentId) {
+          // Para produto, usamos o ID do registro de pagamento criado no backend
+          pollingData.paymentId = productPaymentId; 
+      } else {
+        console.error("Polling de pagamento iniciado sem nome de comprador ou ID de pagamento de produto.");
         setIsPollingPaymentStatus(false);
         return;
       }
 
+
       // Inicia o "martelo" (polling)
       intervalId = setInterval(async () => {
         try {
-          const response = await axios.post('http://localhost:3000/find-payment-class', {
-            name: buyerName 
-          });
+          const endpoint = isProfessorFlow 
+            ? 'https://backendagenda-paf6.onrender.com/find-payment-class' // Aula: verifica pelo nome (Assumindo que o nome é único o suficiente para MOCK)
+            : 'https://backendagenda-paf6.onrender.com/find-payment-product'; // Produto/Pacote: Rota de verificação real por ID do registro
+
+          const response = await axios.post(endpoint, pollingData);
           
-          const isPaid = response.data; // Espera um boolean (true/false)
+          const isPaid = response.data.isPaid; // Espera um boolean (true/false)
 
           if (isPaid === true) {
             clearInterval(intervalId); // Para o "martelo"
             setIsPollingPaymentStatus(false); // Para o estado de polling
             
-            alert("Pagamento PIX confirmado! Você será redirecionado para a agenda.");
+            alert(`Pagamento PIX confirmado! ${isProfessorFlow ? 'Você será redirecionado para a agenda.' : 'Sua compra foi concluída com sucesso.'}`);
             
             // ==================================================
-            // ATUALIZAÇÃO: Captura os dados ANTES de limpar o estado
+            // Ação de sucesso (Redirecionamento para Agenda ou Fechamento)
             // ==================================================
-            const professorState = selectedProfessor;
-            const specialtyState = selectedSpecialty;
+            if (isProfessorFlow) {
+                const professorState = selectedProfessor;
+                const specialtyState = selectedSpecialty;
 
-            // handleCloseCheckout() limpa o estado (incluindo buyerData)
-            handleCloseCheckout(); 
-            
-            // Redireciona o usuário COM OS DADOS CAPTURADOS
-            navigate('/agenda', { 
-                state: { 
-                    professor: professorState, 
-                    specialty: specialtyState 
-                } 
-            });
+                handleCloseCheckout(); 
+                
+                navigate('/agenda', { 
+                    state: { 
+                        professor: professorState, 
+                        specialty: specialtyState 
+                    } 
+                });
+            } else {
+                // Ação de sucesso para produto/pacote (simplesmente fecha)
+                 handleCloseCheckout(); 
+            }
           }
           // Se for false, o intervalo continua...
         } catch (error) {
           console.error("Erro ao verificar status do pagamento PIX:", error);
-          // Opcional: parar em caso de erro para não sobrecarregar
-          // clearInterval(intervalId);
-          // setIsPollingPaymentStatus(false);
-          // alert("Ocorreu um erro ao verificar seu pagamento. Por favor, contate o suporte.");
+          // Em um erro de rede, etc., é melhor deixar o polling continuar por um tempo
+          // ou implementar um contador de tentativas/tempo limite.
         }
       }, 3000); // Bate a cada 3 segundos
     }
 
     // Função de limpeza do useEffect:
-    // Isso é chamado se o componente for desmontado ou
-    // se isPollingPaymentStatus mudar de true para false.
     return () => {
       if (intervalId) {
         clearInterval(intervalId);
       }
     };
-    // ATUALIZAÇÃO: Adiciona professor e especialidade às dependências
-    // para garantir que a função de navegação tenha os dados corretos na closure.
-  }, [isPollingPaymentStatus, buyerData.name, navigate, selectedProfessor, selectedSpecialty]);
+    // ATUALIZAÇÃO: Adiciona novas dependências para o polling de produto
+  }, [isPollingPaymentStatus, buyerData.name, navigate, selectedProfessor, selectedSpecialty, productPaymentId]);
 
 
   // NOVO HANDLER: Abre Modal de Professores (Visão simples)
@@ -335,6 +353,7 @@ const HomePage = () => {
         cpf: "999.999.999-99",     // Mudar para um campo de input real se necessário
         phone: "",
         address: "",
+        postalCode: "",
     });
     // Limpar dados do cartão
     setCardData(clearCardData());
@@ -365,7 +384,7 @@ const HomePage = () => {
     setShowPaymentMethodModal(false); // Fechar novo modal de pagamento
     setShowPixModal(false); // Fechar modal de PIX
     setShowCreditCardModal(false); // Fechar modal de Cartão
-    setPixData({ encodedImage: '', payload: '' }); // Limpar dados PIX
+    setPixData({ encodedImage: '', payload: '', totalValue: 0, freteValue: 0 }); // Limpar dados PIX e valores
     setCardData(clearCardData()); // Limpar dados do cartão
     setSelectedProduct(null);
     setSelectedProfessor(null);
@@ -373,6 +392,7 @@ const HomePage = () => {
     setSelectedPackage(null); // Limpar pacote
     setIsProcessingPayment(false);
     setBuyerData(clearBuyerData());
+    setProductPaymentId(null); // Limpar ID do pagamento de produto
 
     // ====================================================================
     // ADICIONADO: Garante que o polling pare ao fechar o checkout
@@ -393,18 +413,19 @@ const HomePage = () => {
     if (isProcessingPayment) return;
     
     const isProfessorPurchase = !!selectedProfessor && !!selectedSpecialty;
-    const isPackagePurchase = !!selectedPackage; 
-    const isProductPurchase = !!selectedProduct;
+    // O pacote e produto seguem a mesma lógica de validação de dados completos
+    const isProductOrPackagePurchase = !!selectedProduct || !!selectedPackage; 
     
     if (!selectedProfessor && !selectedProduct && !selectedPackage) {
         alert("❌ ERRO: Nenhum item selecionado para compra.");
         return;
     }
     
-    // --- Lógica para Checkout de Produto/Pacote (Validação MOCK) ---
-    if (!isProfessorPurchase) { 
-        if (!buyerData.name || !buyerData.email || !buyerData.cpf || !buyerData.address) {
-            alert("❌ ERRO: Por favor, preencha todos os campos obrigatórios (Nome, Email, CPF, Endereço).");
+    // --- Lógica para Checkout de Produto/Pacote (Validação REAL) ---
+    if (isProductOrPackagePurchase) { 
+        // Verifica se é produto/pacote (exige todos os campos)
+        if (!buyerData.name || !buyerData.email || !buyerData.cpf || !buyerData.address || !buyerData.postalCode) {
+            alert("❌ ERRO: Por favor, preencha todos os campos obrigatórios (Nome, Email, CPF, Endereço, CEP).");
             return;
         }
     } else {
@@ -430,11 +451,11 @@ const HomePage = () => {
     if (method === "Cartão") {
         // Ação para Cartão de Crédito
         if (isProfessorPurchase) {
-            // Abre o formulário de Cartão de Crédito APENAS para Agendamento de Aula (Escopo solicitado)
+            // Abre o formulário de Cartão de Crédito APENAS para Agendamento de Aula
             setShowPaymentMethodModal(false);
             setShowCreditCardModal(true);
         } else {
-            // PIX para Produto/Pacote: USARIA OUTRA ROTA. Por simplicidade, MANTEM O MOCK
+             // PIX para Produto/Pacote: USARIA OUTRA ROTA. Por simplicidade, MANTEM O MOCK
             setIsProcessingPayment(true);
             setTimeout(() => {
                 setIsProcessingPayment(false);
@@ -448,17 +469,79 @@ const HomePage = () => {
     if (method === "Pix") {
         setIsProcessingPayment(true);
         
+        // --- INTEGRAÇÃO PIX REAL PARA PRODUTO/PACOTE ---
         if (!isProfessorPurchase) {
-            // PIX para Produto/Pacote: USARIA OUTRA ROTA. Por simplicidade, MANTEM O MOCK
-            setTimeout(() => {
+            
+            // Note: Pacote é tratado como Produto MOCK, mas a rota real é para produto.
+            const productData = selectedProduct || selectedPackage; // Usa o pacote como produto mockado
+            
+            if (!productData) {
+                alert("Erro interno: Produto/Pacote não selecionado.");
                 setIsProcessingPayment(false);
-                alert(`✅ Sucesso! Processando pagamento de ${item} via Pix (MOCK).`);
-                handleCloseCheckout();
-            }, 1500);
-            return;
+                return;
+            }
+            
+            // Monta o objeto que o backend espera: { product, buyerData }
+            const pixRequestData = {
+                // Para Produto real (usamos o estado completo do produto)
+                product: {
+                    name: productData.name || productData.packageName, // Nome do item
+                    value: productData.price, // Preço base
+                    CEP: productData.CEP || "95010010", // Mock CEP de Origem se não existir
+                    weight: productData.weight || 1.0, // Mock peso
+                    height: productData.height || 10, // Mock altura
+                    width: productData.width || 10, // Mock largura
+                    frete: productData.frete || false, // Mock frete
+                }, 
+                buyerData: {
+                    name: buyerData.name,
+                    email: buyerData.email,
+                    cpfCnpj: buyerData.cpf, // O backend espera cpfCnpj
+                    mobilePhone: buyerData.phone,
+                    address: buyerData.address,
+                    cepDestino: buyerData.postalCode, // O backend espera cepDestino
+                }
+            };
+            
+            try {
+                // ATUALIZADO: Rota de PIX Transparente para Produto/Pacote
+                const response = await axios.post(
+                    'https://backendagenda-paf6.onrender.com/buyProductWithPix', 
+                    pixRequestData
+                );
+                
+                if (response.data.success) {
+                    setPixData({
+                        encodedImage: response.data.encodedImage,
+                        payload: response.data.payload,
+                        totalValue: response.data.totalValue, // Recebe o total com frete
+                        freteValue: response.data.valueFrete, // Recebe o valor do frete
+                    });
+                    setProductPaymentId(response.data.paymentId); // Armazena o ID para o Polling
+                    
+                    setShowPaymentMethodModal(false); // Fecha seleção de método
+                    setShowPixModal(true); // Abre modal do PIX
+
+                    // ADICIONADO: Inicia o "martelo" (polling) de produto
+                    setIsPollingPaymentStatus(true); 
+
+                } else {
+                    throw new Error("Resposta de sucesso, mas sem dados PIX.");
+                }
+
+            } catch (error) {
+                console.error("Erro ao processar PIX de Produto/Pacote:", error.response?.data || error.message);
+                const errorMessage = error.response?.data?.message || error.message;
+                alert(`❌ Erro ao processar PIX para ${item}. Erro: ${errorMessage}`);
+                setShowPaymentMethodModal(true); // Volta para seleção de método
+            } finally {
+                setIsProcessingPayment(false);
+            }
+            
+            return; // Sai da função
         }
         
-        // --- INTEGRAÇÃO PIX REAL PARA AGENDAMENTO DE AULA ---
+        // --- INTEGRAÇÃO PIX REAL PARA AGENDAMENTO DE AULA (Mantido) ---
         try {
             const pixRequestData = {
                 name: buyerData.name,
@@ -467,24 +550,22 @@ const HomePage = () => {
                 value: value, 
             };
             
-            // Note: O endpoint deve ser o do seu BACKEND, que por sua vez chama a Asaas
             const response = await axios.post(
-                'http://localhost:3000/payperclass-pix', 
+                'https://backendagenda-paf6.onrender.com/payperclass-pix', 
                 pixRequestData
             );
             
-            // Se a chamada for bem-sucedida, exibe o QR Code
             if (response.data.success) {
                 setPixData({
                     encodedImage: response.data.encodedImage,
                     payload: response.data.payload,
+                    totalValue: value, // Aula: o valor é o preço da aula
+                    freteValue: 0,
                 });
                 setShowPaymentMethodModal(false); // Fecha seleção de método
                 setShowPixModal(true); // Abre modal do PIX
 
-                // ====================================================================
-                // ADICIONADO: Inicia o "martelo" (polling)
-                // ====================================================================
+                // ADICIONADO: Inicia o "martelo" (polling) de aula
                 setIsPollingPaymentStatus(true);
 
             } else {
@@ -492,7 +573,7 @@ const HomePage = () => {
             }
 
         } catch (error) {
-            console.error("Erro ao processar PIX:", error.response?.data || error.message);
+            console.error("Erro ao processar PIX de Aula:", error.response?.data || error.message);
             alert(`❌ Erro ao processar PIX para ${item}. Tente outro método ou verifique os dados.`);
             setShowPaymentMethodModal(true); // Volta para seleção de método
         } finally {
@@ -548,19 +629,14 @@ const HomePage = () => {
     
     try {
         const response = await axios.post(
-            'http://localhost:3000/payperclass-creditcard', 
+            'https://backendagenda-paf6.onrender.com/payperclass-creditcard', 
             cardRequestData
         );
 
         if (response.data.success) {
-            // ====================================================================
             // ATUALIZAÇÃO: Redireciona direto para /agenda COM DADOS
-            // ====================================================================
             alert(`✅ Sucesso! Pagamento via Cartão concluído. Status: ${response.data.status}. Redirecionando para a agenda.`);
             
-            // ==================================================
-            // ATUALIZAÇÃO: Captura os dados ANTES de limpar o estado
-            // ==================================================
             const professorState = selectedProfessor;
             const specialtyState = selectedSpecialty;
 
@@ -961,6 +1037,8 @@ const HomePage = () => {
   const PaymentMethodModal = ({ isOpen, onClose, onSelectMethod, isProcessing }) => {
     if (!isOpen) return null;
 
+    const isProfessorFlow = !!selectedProfessor;
+    
     const itemDescription = selectedProfessor 
         ? `${selectedProfessor.name} (${selectedSpecialty.typeDance})`
         : selectedPackage
@@ -981,8 +1059,12 @@ const HomePage = () => {
                 Item: <span className="font-semibold">{itemDescription}</span>
             </p>
             <p className="text-xl font-extrabold text-blue-500">
-                Valor Total: R$ {itemPrice}
+                Valor Base: R$ {itemPrice}
             </p>
+             {/* Aviso de frete (apenas para produto/pacote) */}
+            {!isProfessorFlow && (
+                 <p className="text-sm text-gray-500 mt-1">O valor final com frete será calculado ao gerar o PIX/Cartão.</p>
+            )}
           </div>
           
           <div className="space-y-4">
@@ -1020,7 +1102,7 @@ const HomePage = () => {
   // ====================================================================
   // NOVO COMPONENTE AUXILIAR: Modal de Exibição do PIX
   // ====================================================================
-  const PixModal = ({ isOpen, onClose, encodedImage, payload, isProcessing }) => {
+  const PixModal = ({ isOpen, onClose, encodedImage, payload, isPolling, totalValue, freteValue }) => {
     if (!isOpen) return null;
     
     // Função para copiar o payload
@@ -1029,6 +1111,9 @@ const HomePage = () => {
         alert("Código PIX Copiado!");
     };
     
+    // Verifica se a compra é de produto/pacote (frete > 0)
+    const isProductFlow = freteValue > 0 || !!selectedProduct || !!selectedPackage;
+
     return (
         <div className="fixed inset-0 bg-white bg-opacity-90 flex items-center justify-center p-4 z-50">
           <div className="bg-white p-6 rounded-xl shadow-2xl max-w-md w-full text-center">
@@ -1037,7 +1122,7 @@ const HomePage = () => {
             </h3>
             
             {/* NOVO: Aviso de Polling */}
-            {isPollingPaymentStatus ? (
+            {isPolling ? (
                 <p className="mb-4 text-gray-700 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                     Estamos aguardando a confirmação do seu pagamento. 
                     Você será redirecionado automaticamente.
@@ -1045,6 +1130,16 @@ const HomePage = () => {
             ) : (
                 <p className="mb-4 text-gray-700">Escaneie o QR Code ou use o código Copia e Cola:</p>
             )}
+            
+            {/* Detalhes do Valor (Com ou sem frete) */}
+            <div className="mb-6 p-4 border rounded-lg bg-gray-50 text-left">
+                {isProductFlow && freteValue > 0 && (
+                    <p className="text-sm text-gray-700">Frete: R$ {parseFloat(freteValue).toFixed(2)}</p>
+                )}
+                 <p className="text-xl font-extrabold text-blue-500">
+                    Valor Total: R$ {parseFloat(totalValue).toFixed(2)}
+                </p>
+            </div>
             
             {/* QR Code (Imagem Base64) */}
             <div className="flex justify-center mb-6 border p-2 rounded-lg">
@@ -1435,15 +1530,20 @@ const HomePage = () => {
                 {/* O input de dados foi expandido para o fluxo de professor, pois o PIX precisa de nome, email e CPF */}
                 <div className="space-y-4 mb-6">
                     <p className="text-lg font-semibold text-[#201E1E]">Dados do Comprador (Para Pagamento):</p>
-                    {["name", "email", "cpf", "phone", "address"].map((field) => {
+                    {["name", "email", "cpf", "phone", "address", "postalCode"].map((field) => {
                         const isProfessorFlow = !!selectedProfessor;
                         // Campos obrigatórios para PIX/Cartão de Aula (Nome, Email, CPF)
-                        const isRequired = isProfessorFlow 
-                            ? ["name", "email", "cpf"].includes(field) 
-                            : ["name", "email", "cpf", "address"].includes(field);
+                        const requiredForClass = ["name", "email", "cpf"].includes(field);
+                        // Campos obrigatórios para Produto/Pacote (Nome, Email, CPF, Endereço, CEP)
+                        const requiredForProduct = ["name", "email", "cpf", "address", "postalCode"].includes(field);
                             
-                        // Endereço é obrigatório APENAS para Produto/Pacote.
-                        if (field === "address" && isProfessorFlow) return null;
+                        const isRequired = isProfessorFlow ? requiredForClass : requiredForProduct;
+
+                        // Se for fluxo de aula, não exibe Endereço e CEP
+                        if (isProfessorFlow && (field === "address" || field === "postalCode")) return null;
+                        
+                        // Se for fluxo de produto, o telefone é opcional.
+                        if (!isProfessorFlow && field === "phone") return null;
 
                         return (
                           <input
@@ -1455,7 +1555,8 @@ const HomePage = () => {
                                 field === 'email' ? 'E-mail*' : 
                                 field === 'cpf' ? 'CPF*' : 
                                 field === 'phone' ? 'Telefone' : 
-                                'Endereço Completo (Rua, Número, Bairro, CEP)*'
+                                field === 'address' ? 'Endereço Completo (Rua, Número, Bairro)*' :
+                                'CEP*' // postalCode
                             }
                             required={isRequired}
                             value={buyerData[field]}
@@ -1465,7 +1566,7 @@ const HomePage = () => {
                           />
                         );
                     })}
-                    <p className="text-sm text-gray-500">* Campos obrigatórios. O campo Endereço é obrigatório apenas para a compra de Produtos/Pacotes.</p>
+                    <p className="text-sm text-gray-500">* Campos obrigatórios. Os campos Endereço e CEP são obrigatórios apenas para a compra de Produtos/Pacotes.</p>
                 </div>
 
                 {/* Botões */}
@@ -1507,7 +1608,9 @@ const HomePage = () => {
         onClose={handleCloseCheckout}
         encodedImage={pixData.encodedImage}
         payload={pixData.payload}
-        isProcessing={isProcessingPayment}
+        isPolling={isPollingPaymentStatus}
+        totalValue={pixData.totalValue}
+        freteValue={pixData.freteValue}
       />
       
       {/* NOVO: Modal de Formulário do Cartão de Crédito */}

@@ -4,7 +4,7 @@ import Calendar from "react-calendar";
 import "react-calendar/dist/Calendar.css";
 import axios from "axios";
 
-const API_URL = 'http://localhost:3000';
+const API_URL = 'https://backendagenda-paf6.onrender.com';
 
 const mapDayToPortuguese = (date) => {
   const days = [

@@ -4,7 +4,7 @@ import axios from "axios";
 // ====================================================================
 // 1. Definição da URL da API (ATENÇÃO: Substitua pelo seu endereço real)
 // ====================================================================
-const API_URL = 'http://localhost:3000'; // Exemplo de URL. Ajuste conforme seu backend.
+const API_URL = 'https://backendagenda-paf6.onrender.com'; // Exemplo de URL. Ajuste conforme seu backend.
 
 // Função auxiliar para converter File para Base64 (Data URL)
 const fileToBase64 = (file) => new Promise((resolve, reject) => {
@@ -809,18 +809,18 @@ const ProfessorPainel = () => {
   };
 
   async function handleAddProduct() {
+    // Mapeamento dos campos do frontend (productFormData) para os campos do backend (/addProduct)
     const productData = {
         nameProduct: productFormData.nome,
         description: productFormData.descricao,
         value: productFormData.preco,
         images: productFormData.imagens,
-        repassarFrete: productFormData.repassarFrete, 
-        // CAMPOS DE ENVIO
-        cepOrigem: productFormData.cepOrigem,
-        peso: productFormData.peso,
-        altura: productFormData.altura,
-        largura: productFormData.largura,
-        formato: productFormData.formato,
+        // NOVOS CAMPOS DE FRETE E DIMENSÕES conforme a rota do backend:
+        frete: productFormData.repassarFrete, // 'repassarFrete' do frontend -> 'frete' do backend (boolean)
+        CEP: productFormData.cepOrigem,      // 'cepOrigem' do frontend -> 'CEP' do backend
+        wheight: productFormData.peso,       // 'peso' do frontend -> 'wheight' do backend
+        height: productFormData.altura,      // 'altura' do frontend -> 'height' do backend
+        width: productFormData.largura,      // 'largura' do frontend -> 'width' do backend
     };
     try {
         await axios.post(`${API_URL}/addProduct`, JSON.stringify(productData), {
@@ -836,18 +836,18 @@ const ProfessorPainel = () => {
 
   const handleEditProduct = async () => {
     if (!editingProductId) return;
+    // Mapeamento dos campos do frontend (productFormData) para os campos do backend (/editProduct)
     const productData = {
         nameProduct: productFormData.nome,
         description: productFormData.descricao,
         value: productFormData.preco,
         images: productFormData.imagens,
-        repassarFrete: productFormData.repassarFrete, 
-        // CAMPOS DE ENVIO
-        cepOrigem: productFormData.cepOrigem,
-        peso: productFormData.peso,
-        altura: productFormData.altura,
-        largura: productFormData.largura,
-        formato: productFormData.formato,
+        // NOVOS CAMPOS DE FRETE E DIMENSÕES conforme a rota do backend:
+        frete: productFormData.repassarFrete, // 'repassarFrete' do frontend -> 'frete' do backend (boolean)
+        CEP: productFormData.cepOrigem,      // 'cepOrigem' do frontend -> 'CEP' do backend
+        wheight: productFormData.peso,       // 'peso' do frontend -> 'wheight' do backend
+        height: productFormData.altura,      // 'altura' do frontend -> 'height' do backend
+        width: productFormData.largura,      // 'largura' do frontend -> 'width' do backend
     };
     try {
         await axios.post(`${API_URL}/editProduct/${editingProductId}`, JSON.stringify(productData), {
@@ -962,70 +962,69 @@ const ProfessorPainel = () => {
   
   // MODIFICADA: Usa as novas chaves 'packageName', 'price', 'description'
   const handlePackageFormChange = (e) => {
-      const { name, value } = e.target;
-      if (name === 'packageName' || name === 'price' || name === 'description') {
-          setPackageFormData(prev => ({ ...prev, [name]: value }));
-      } else {
-          const [prefix, profId] = name.split('-');
-          if (prefix === 'classes') {
-              setPackageFormData(prev => ({
-                  ...prev,
-                  professorClasses: {
-                      ...prev.professorClasses,
-                      [profId]: parseInt(value) || 0,
-                  },
-              }));
-          }
-      }
+    const { name, value } = e.target;
+    if (name === 'packageName' || name === 'price' || name === 'description') {
+        setPackageFormData(prev => ({ ...prev, [name]: value }));
+    } else {
+        const [prefix, profId] = name.split('-');
+        if (prefix === 'classes') {
+            setPackageFormData(prev => ({
+                ...prev,
+                professorClasses: {
+                    ...prev.professorClasses,
+                    [profId]: parseInt(value) || 0,
+                },
+            }));
+        }
+    }
   };
-
+  
   // MODIFICADA: Usa as novas chaves
   const handleStartPackageCreation = () => {
-      if (selectedProfessorsForPackage.length < 2) {
-          alert("Selecione no mínimo 2 professores para criar um pacote.");
-          return;
-      }
-      const initialClasses = selectedProfessorsForPackage.reduce((acc, profId) => {
-          acc[profId] = 1; 
-          return acc;
-      }, {});
-
-      setPackageFormData({
-          packageName: "", // Usar a nova chave
-          price: "",       // Usar a nova chave
-          description: "", // Inicializar descrição
-          professorClasses: initialClasses,
-      });
-      setPackageCreationMode(CRUD_MODES.ADD);
+    if (selectedProfessorsForPackage.length < 2) {
+        alert("Selecione no mínimo 2 professores para criar um pacote.");
+        return;
+    }
+    const initialClasses = selectedProfessorsForPackage.reduce((acc, profId) => {
+        acc[profId] = 1;
+        return acc;
+    }, {});
+    setPackageFormData({ 
+        packageName: "", // Usar a nova chave
+        price: "", // Usar a nova chave
+        description: "", // Inicializar descrição
+        professorClasses: initialClasses,
+    });
+    setPackageCreationMode(CRUD_MODES.ADD);
   };
 
   // MODIFICADA: Implementa a coleta de dados, validação e requisição POST
-  const handlePackageSubmit = async (e) => {
+  const handleSubmitPackage = async (e) => {
     e.preventDefault();
-    const { packageName, price, description, professorClasses } = packageFormData;
 
-    // Validações
-    if (!packageName || packageName.length < 3) {
-        alert("O nome do pacote é obrigatório e deve ter no mínimo 3 caracteres.");
+    const { packageName, price, description, professorClasses } = packageFormData;
+    
+    // Validação básica
+    if (!packageName.trim() || !price || parseFloat(price) <= 0 || !description.trim()) {
+        alert("Por favor, preencha o nome do pacote, a descrição e o valor total (deve ser positivo).");
         return;
     }
-    if (!description || description.length < 10) {
-        alert("A descrição do pacote é obrigatória e deve ter no mínimo 10 caracteres.");
-        return;
-    }
+
     const finalPrice = parseFloat(price);
     if (isNaN(finalPrice) || finalPrice <= 0) {
-        alert("O preço deve ser um valor numérico positivo.");
+        alert("O valor total deve ser um número positivo.");
         return;
     }
-
-    // Mapeamento para o formato de array de professores exigido pelo backend
-    const professorsArray = selectedProfessorsForPackage
-        .map(profId => {
-            const professor = professores.find(p => p._id === profId);
-            const quantityClassess = professorClasses[profId] || 0;
-            if (!professor || quantityClassess <= 0) {
-                return null; // Ignorar professores inválidos ou com 0 aulas
+    
+    const professorsInPackage = professores.filter(p => selectedProfessorsForPackage.includes(p._id));
+    
+    // Prepara o array de professores com quantidade de aulas
+    const professorsArray = professorsInPackage
+        .map(professor => {
+            const quantityClassess = professorClasses[professor._id] || 0;
+            if (quantityClassess <= 0) {
+                // Ignore professores com 0 aulas
+                return null;
             }
             return {
                 name: professor.name,
@@ -1051,7 +1050,7 @@ const ProfessorPainel = () => {
         const response = await axios.post(`${API_URL}/createPackage`, payload, {
             headers: { 'Content-Type': 'application/json' }
         });
-
+        
         if (response.data && response.data.package) {
             setPackageSuccessMessage(`Pacote "${packageName}" criado com sucesso!`);
             setShowPackageSuccessModal(true);
@@ -1060,6 +1059,7 @@ const ProfessorPainel = () => {
         } else {
             alert("Erro desconhecido ao cadastrar pacote.");
         }
+
     } catch (error) {
         console.error("Erro ao cadastrar pacote:", error.response?.data || error);
         alert(`Erro ao cadastrar pacote. ${error.response?.data?.error || 'Verifique o console.'}`);
@@ -1071,306 +1071,79 @@ const ProfessorPainel = () => {
   // COMPONENTES DE RENDERIZAÇÃO
   // ====================================================================
 
-  const renderProfessorCrud = () => {
-    if (professorCrudMode === CRUD_MODES.ADD || professorCrudMode === CRUD_MODES.EDIT) {
-        return renderProfessorForm();
-    }
-    return renderProfessorList();
-  }
-
-  const renderProductCrud = () => {
-    if (productCrudMode === CRUD_MODES.ADD || productCrudMode === CRUD_MODES.EDIT) {
-        return renderProductForm();
-    }
-    return renderProductList();
-  }
-
-  const renderAgendamentos = () => {
+  const renderProductList = () => {
+    // ... (Mantido o código de Listagem de Produtos)
     return (
-        <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>Agendamentos Confirmados</h2>
-            {agendamentoIsLoading ? (
-                <p className="text-center py-4">Carregando agendamentos...</p>
-            ) : scheduledClients.length === 0 ? (
-                <p className="text-center py-4">Nenhum agendamento confirmado no momento.</p>
-            ) : (
-                <ul className="space-y-4">
-                    {scheduledClients.map((client, index) => (
-                        <li key={index} className="border-b pb-2">
-                            <p className="font-bold">{client.clientName}</p>
-                            <p className="text-sm text-gray-600">
-                                {client.date} às {client.time} - {client.type}
-                            </p>
-                        </li>
-                    ))}
-                </ul>
-            )}
-        </div>
-    );
-  }
-
-  const renderSalesList = () => {
-    return (
-        <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>Histórico de Vendas/Pagamentos</h2>
-            {salesIsLoading ? (
-                <p className="text-center py-4">Carregando histórico...</p>
-            ) : sales.length === 0 ? (
-                <p className="text-center py-4">Nenhum registro de venda encontrado.</p>
-            ) : (
-                <div className="overflow-x-auto">
-                    <table className="min-w-full divide-y divide-gray-200">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    ID da Venda
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Produto/Serviço
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Valor (R$)
-                                </th>
-                                <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                    Data
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="bg-white divide-y divide-gray-200">
-                            {sales.map((sale) => (
-                                <tr key={sale._id}>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                                        {sale._id.substring(0, 8)}...
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {sale.productName || 'N/A'}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
-                                        {parseFloat(sale.value).toFixed(2)}
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                                        {new Date(sale.createdAt).toLocaleDateString()}
-                                    </td>
-                                </tr>
-                            ))}
-                        </tbody>
-                    </table>
-                </div>
-            )}
-        </div>
-    );
-  };
-  
-  // Componente de Configuração Semanal (Sub-componente da Agenda)
-  const renderWeeklyConfig = () => (
-      <>
-          <p className="mb-6 text-gray-600">
-              Defina o padrão semanal de sua disponibilidade (horários de início e fim).
-          </p>
-          <div className="space-y-4">
-              {scheduleFormData.map((dayConfig, index) => (
-                  <div key={dayConfig.day} className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 rounded-lg transition ${dayConfig.active ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200 opacity-60'}`} >
-                      <div className="flex items-center w-full sm:w-1/4 mb-2 sm:mb-0">
-                          <input
-                              type="checkbox"
-                              id={`active-${index}`}
-                              checked={dayConfig.active}
-                              onChange={(e) => handleScheduleChange(index, 'active', e.target.checked)}
-                              className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-                          />
-                          <label htmlFor={`active-${index}`} className="ml-3 font-semibold text-lg" style={{ color: dayConfig.active ? "#2563EB" : "#4B5563" }}>
-                              {dayConfig.day}
-                          </label>
-                      </div>
-                      <div className="flex gap-4 w-full sm:w-3/4 items-center">
-                          <label className="text-sm font-medium">Início:</label>
-                          <input
-                              type="time"
-                              value={dayConfig.start}
-                              onChange={(e) => handleScheduleChange(index, 'start', e.target.value)}
-                              disabled={!dayConfig.active}
-                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/3"
-                              required={dayConfig.active}
-                          />
-                          <label className="text-sm font-medium">Fim:</label>
-                          <input
-                              type="time"
-                              value={dayConfig.end}
-                              onChange={(e) => handleScheduleChange(index, 'end', e.target.value)}
-                              disabled={!dayConfig.active}
-                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/3"
-                              required={dayConfig.active}
-                          />
-                      </div>
-                  </div>
-              ))}
-          </div>
-      </>
-  );
-
-  // Componente de Disponibilidade Mensal (Sub-componente da Agenda)
-  const renderMonthlyAvailability = () => (
-      <>
-          <p className="mb-6 text-gray-600">
-              Defina em quais meses do ano você estará disponível para aceitar agendamentos.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {MONTHS.map((month, index) => (
-                  <div
-                      key={index}
-                      className={`p-4 rounded-lg flex flex-col items-center justify-center transition cursor-pointer ${monthlyAvailability[index] === false ? 'bg-red-50 border border-red-200 opacity-70' : 'bg-green-100 border border-green-400'}`}
-                      onClick={() => handleMonthlyChange(index, monthlyAvailability[index] === false ? true : false)}
-                  >
-                      <span className="font-semibold text-lg" style={{ color: "#201E1E" }}>{month}</span>
-                      <span className={`mt-1 text-sm font-medium ${monthlyAvailability[index] === false ? 'text-red-700' : 'text-green-700'}`}>
-                          {monthlyAvailability[index] === false ? 'Indisponível' : 'Disponível'}
-                      </span>
-                  </div>
-              ))}
-          </div>
-      </>
-  );
-
-  // Componente de Datas Específicas (Sub-componente da Agenda)
-  const renderSpecificDates = () => (
-      <>
-          <p className="mb-4 text-gray-600">
-              Defina horários específicos ou exceções para datas pontuais.
-          </p>
-          <button
-              type="button"
-              onClick={handleSpecificDateAdd}
-              className="font-semibold py-2 px-4 rounded-lg shadow-md transition bg-green-500 hover:bg-green-600 text-white mb-6"
-          >
-              + Adicionar Data Específica
-          </button>
-          <div className="space-y-4">
-              {specificDates.map((dateConfig, index) => (
-                  <div key={index} className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 rounded-lg transition border ${dateConfig.active ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}>
-                      <div className="flex items-center w-full sm:w-1/4 mb-2 sm:mb-0 space-x-2">
-                          <input
-                              type="date"
-                              value={dateConfig.date}
-                              onChange={(e) => handleSpecificDateChange(index, 'date', e.target.value)}
-                              className="p-2 border rounded-md shadow-sm w-full"
-                          />
-                          <button
-                              type="button"
-                              onClick={() => handleSpecificDateRemove(index)}
-                              className="text-red-500 hover:text-red-700 transition"
-                              title="Remover data"
-                          >
-                              &times;
-                          </button>
-                      </div>
-
-                      <div className="flex flex-wrap gap-4 w-full sm:w-3/4 items-center mt-2 sm:mt-0">
-                          <div className="flex items-center space-x-2">
-                              <input
-                                  type="checkbox"
-                                  id={`active-specific-${index}`}
-                                  checked={dateConfig.active}
-                                  onChange={(e) => handleSpecificDateChange(index, 'active', e.target.checked)}
-                                  className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
-                              />
-                              <label htmlFor={`active-specific-${index}`} className="text-sm font-medium">Disponível</label>
-                          </div>
-                          <label className="text-sm font-medium">Início:</label>
-                          <input
-                              type="time"
-                              value={dateConfig.start}
-                              onChange={(e) => handleSpecificDateChange(index, 'start', e.target.value)}
-                              disabled={!dateConfig.active}
-                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/4"
-                              required={dateConfig.active}
-                          />
-                          <label className="text-sm font-medium">Fim:</label>
-                          <input
-                              type="time"
-                              value={dateConfig.end}
-                              onChange={(e) => handleSpecificDateChange(index, 'end', e.target.value)}
-                              disabled={!dateConfig.active}
-                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/4"
-                              required={dateConfig.active}
-                          />
-                      </div>
-                  </div>
-              ))}
-          </div>
-      </>
-  );
-
-  // Componente Principal de Configuração de Agenda (Mantido)
-  const renderAgendaConfiguration = () => {
-    let content;
-    switch (agendaConfigMode) {
-        case AGENDA_CONFIG_MODES.PADRAO_SEMANAL:
-            content = renderWeeklyConfig();
-            break;
-        case AGENDA_CONFIG_MODES.DISPONIBILIDADE_MENSAL:
-            content = renderMonthlyAvailability();
-            break;
-        case AGENDA_CONFIG_MODES.DATAS_ESPECIFICAS:
-            content = renderSpecificDates();
-            break;
-        default:
-            content = renderWeeklyConfig();
-    }
-
-    return (
-        <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }} >
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>
-                Configuração Avançada da Agenda
-            </h2>
-            <div className="flex space-x-2 border-b mb-6 overflow-x-auto pb-2">
-                <button
-                    type="button"
-                    className={`py-2 px-4 font-medium transition whitespace-nowrap ${agendaConfigMode === AGENDA_CONFIG_MODES.PADRAO_SEMANAL ? 'border-b-4 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
-                    onClick={() => setAgendaConfigMode(AGENDA_CONFIG_MODES.PADRAO_SEMANAL)}
+        <div className="shadow-lg rounded-xl p-6 border max-w-7xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>Lista de Produtos</h2>
+            
+            <div className="flex justify-end mb-4">
+                <button 
+                    onClick={switchToProductAddForm}
+                    className="font-semibold py-2 px-4 rounded-lg shadow-md transition transform hover:scale-[1.01]"
+                    style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
                 >
-                    Padrão Semanal
-                </button>
-                <button
-                    type="button"
-                    className={`py-2 px-4 font-medium transition whitespace-nowrap ${agendaConfigMode === AGENDA_CONFIG_MODES.DISPONIBILIDADE_MENSAL ? 'border-b-4 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
-                    onClick={() => setAgendaConfigMode(AGENDA_CONFIG_MODES.DISPONIBILIDADE_MENSAL)}
-                >
-                    Disponibilidade Mensal
-                </button>
-                <button
-                    type="button"
-                    className={`py-2 px-4 font-medium transition whitespace-nowrap ${agendaConfigMode === AGENDA_CONFIG_MODES.DATAS_ESPECIFICAS ? 'border-b-4 border-blue-500 text-blue-600' : 'text-gray-500 hover:text-blue-500'}`}
-                    onClick={() => setAgendaConfigMode(AGENDA_CONFIG_MODES.DATAS_ESPECIFICAS)}
-                >
-                    Datas Específicas
+                    + Adicionar Produto
                 </button>
             </div>
-            
-            <form onSubmit={handleScheduleSubmit} className="space-y-6">
-                {content}
-                <div className="flex justify-end pt-4 border-t">
-                    <button
-                        type="submit"
-                        className="font-semibold py-3 px-6 rounded-lg shadow-md transition transform hover:scale-[1.01]"
-                        style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
-                    >
-                        Salvar Configurações da Agenda
-                    </button>
+
+            {isLoading ? (
+                <p className="text-center py-4">Carregando produtos...</p>
+            ) : produtos.length === 0 ? (
+                <p className="text-center py-4">Nenhum produto cadastrado.</p>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                    {produtos.map((produto) => (
+                        <div key={produto._id} className="border rounded-xl shadow-lg overflow-hidden transition duration-300 hover:shadow-xl" style={{ borderColor: "#A9CBD2", backgroundColor: "#F9FBEE" }}>
+                            <ProductImageGallery images={produto.images} nameProduct={produto.nameProduct} />
+                            
+                            <div className="p-4">
+                                <h3 className="text-xl font-bold mb-1 line-clamp-2" style={{ color: "#201E1E" }}>{produto.nameProduct}</h3>
+                                <p className="text-sm text-gray-600 mb-2 line-clamp-3">{produto.description}</p>
+                                
+                                <p className="text-lg font-bold mt-2" style={{ color: "#201E1E" }}>
+                                    R$ {parseFloat(produto.price).toFixed(2)}
+                                </p>
+
+                                <p className="text-xs text-gray-500 mt-1">
+                                    {produto.repassarFrete ? 'Frete repassado ao cliente' : 'Frete por conta da loja'}
+                                </p>
+                                
+                                <div className="flex space-x-2 mt-4">
+                                    <button 
+                                        onClick={() => startEditProduct(produto)}
+                                        className="flex-1 py-2 px-4 text-sm font-semibold rounded-lg transition bg-blue-400 hover:bg-blue-500 text-white"
+                                    >
+                                        Editar
+                                    </button>
+                                    <button 
+                                        onClick={() => handleDeleteProduct(produto._id)}
+                                        className="flex-1 py-2 px-4 text-sm font-semibold rounded-lg transition bg-red-400 hover:bg-red-500 text-white"
+                                    >
+                                        Deletar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            </form>
+            )}
         </div>
     );
-  };
+  }
 
   const renderProductForm = () => {
     const isEditing = productCrudMode === CRUD_MODES.EDIT;
+    
+    // Esta parte do código já estava completa, mas a deixo aqui para que o componente esteja 100% completo.
     return (
-        <div className="shadow-lg rounded-xl p-6 border max-w-2xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
+        <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
             <h2 className="text-2xl font-semibold mb-6" style={{ color: "#201E1E" }}>
                 {isEditing ? 'Editar Produto' : 'Cadastrar Novo Produto'}
             </h2>
+            
             <form onSubmit={handleSubmitProduto} className="space-y-6">
-
+                
                 {/* INFORMAÇÕES BÁSICAS */}
                 <div>
                     <label htmlFor="nome" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Nome do Produto</label>
@@ -1397,7 +1170,7 @@ const ProfessorPainel = () => {
                         className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
                     />
                 </div>
-
+                
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                         <label htmlFor="preco" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Preço (R$)</label>
@@ -1413,6 +1186,7 @@ const ProfessorPainel = () => {
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
+                    
                     <div className="flex items-center mt-6">
                         <input
                             type="checkbox"
@@ -1425,11 +1199,11 @@ const ProfessorPainel = () => {
                         <label htmlFor="repassarFrete" className="ml-3 text-sm font-medium" style={{ color: "#201E1E" }}>Repassar custo do frete ao cliente</label>
                     </div>
                 </div>
-
-                {/* INFORMAÇÕES DE ENVIO (NOVO/MODIFICADO) - RESPONSIVO */}
-                <h3 className="text-xl font-medium pt-4 border-t" style={{ color: "#201E1E" }}>Configuração de Envio (Obrigatório)</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    {/* CEP DE ORIGEM */}
+                
+                {/* INFORMAÇÕES DE ENVIO */}
+                <div className="pt-4 border-t">
+                    <h3 className="text-xl font-medium mb-4" style={{ color: "#201E1E" }}>Informações de Envio (Obrigatório para Frete)</h3>
+                    
                     <div>
                         <label htmlFor="cepOrigem" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>CEP de Origem (Somente números)</label>
                         <input
@@ -1439,76 +1213,72 @@ const ProfessorPainel = () => {
                             value={productFormData.cepOrigem}
                             onChange={handleProductInputChange}
                             required
-                            maxLength="8"
-                            pattern="\d*"
-                            placeholder="Ex: 01000000"
+                            placeholder="Ex: 01001000"
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
-                    {/* FORMATO */}
-                    <div>
-                        <label htmlFor="formato" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Formato da Embalagem</label>
+                    
+                    <div className="mt-4">
+                        <label htmlFor="formato" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Formato do Pacote</label>
                         <select
                             id="formato"
                             name="formato"
                             value={productFormData.formato}
                             onChange={handleProductInputChange}
                             required
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
                         >
                             <option value="1">1: Caixa/Pacote</option>
                             <option value="2">2: Rolo/Cilindro</option>
                             <option value="3">3: Envelope</option>
                         </select>
                     </div>
+                    
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-4">
+                        <div>
+                            <label htmlFor="peso" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Peso (kg)</label>
+                            <input
+                                type="text"
+                                id="peso"
+                                name="peso"
+                                value={productFormData.peso}
+                                onChange={handleProductInputChange}
+                                required
+                                placeholder="Ex: 0.5"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label htmlFor="altura" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Altura (cm)</label>
+                            <input
+                                type="text"
+                                id="altura"
+                                name="altura"
+                                value={productFormData.altura}
+                                onChange={handleProductInputChange}
+                                required
+                                placeholder="Ex: 10"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                        
+                        <div>
+                            <label htmlFor="largura" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Largura (cm)</label>
+                            <input
+                                type="text"
+                                id="largura"
+                                name="largura"
+                                value={productFormData.largura}
+                                onChange={handleProductInputChange}
+                                required
+                                placeholder="Ex: 20"
+                                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
+                            />
+                        </div>
+                    </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                    {/* PESO */}
-                    <div>
-                        <label htmlFor="peso" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Peso (Kg)</label>
-                        <input
-                            type="text"
-                            id="peso"
-                            name="peso"
-                            value={productFormData.peso}
-                            onChange={handleProductInputChange}
-                            required
-                            placeholder="Ex: 0.5 ou 1"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    {/* ALTURA */}
-                    <div>
-                        <label htmlFor="altura" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Altura (cm)</label>
-                        <input
-                            type="text"
-                            id="altura"
-                            name="altura"
-                            value={productFormData.altura}
-                            onChange={handleProductInputChange}
-                            required
-                            placeholder="Ex: 10"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                    {/* LARGURA */}
-                    <div>
-                        <label htmlFor="largura" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Largura (cm)</label>
-                        <input
-                            type="text"
-                            id="largura"
-                            name="largura"
-                            value={productFormData.largura}
-                            onChange={handleProductInputChange}
-                            required
-                            placeholder="Ex: 20"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
-                        />
-                    </div>
-                </div>
-
-
+                
                 {/* UPLOAD E PREVIEW DE IMAGENS */}
                 <div className="pt-4 border-t">
                     <label className="block text-xl font-medium mb-3" style={{ color: "#201E1E" }}>Imagens do Produto (Máx: 3)</label>
@@ -1518,13 +1288,9 @@ const ProfessorPainel = () => {
                         accept="image/*"
                         multiple
                         disabled={productFormData.imagens.length >= 3}
-                        className="block w-full text-sm text-gray-500
-                            file:mr-4 file:py-2 file:px-4
-                            file:rounded-full file:border-0
-                            file:text-sm file:font-semibold
-                            file:bg-blue-50 file:text-blue-700
-                            hover:file:bg-blue-100"
+                        className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                     />
+                    
                     <div className="mt-4 flex flex-wrap gap-4">
                         {productFormData.imagens.map((image, index) => (
                             <div key={index} className="relative w-24 h-24 border rounded-lg overflow-hidden">
@@ -1560,65 +1326,15 @@ const ProfessorPainel = () => {
             </form>
         </div>
     );
-  };
+  }
 
-  const renderProductList = () => {
-    return (
-        <div className="shadow-lg rounded-xl p-6 border max-w-7xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
-            <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>Lista de Produtos</h2>
-            <div className="flex justify-end mb-4">
-                <button
-                    onClick={switchToProductAddForm}
-                    className="font-semibold py-2 px-4 rounded-lg shadow-md transition transform hover:scale-[1.01]"
-                    style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
-                >
-                    + Adicionar Produto
-                </button>
-            </div>
-
-            {isLoading ? (
-                <p className="text-center py-4">Carregando produtos...</p>
-            ) : produtos.length === 0 ? (
-                <p className="text-center py-4">Nenhum produto cadastrado.</p>
-            ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {produtos.map((produto) => (
-                        <div key={produto._id} className="border rounded-xl shadow-lg overflow-hidden transition duration-300 hover:shadow-xl" style={{ borderColor: "#A9CBD2", backgroundColor: "#F9FBEE" }}>
-                            <ProductImageGallery images={produto.images} nameProduct={produto.nameProduct} />
-                            <div className="p-4">
-                                <h3 className="text-xl font-bold mb-1" style={{ color: "#201E1E" }}>{produto.nameProduct}</h3>
-                                <p className="text-sm text-gray-600 mb-2 line-clamp-3">{produto.description}</p>
-                                <p className="text-2xl font-extrabold mb-4" style={{ color: "#201E1E" }}>R$ {parseFloat(produto.price).toFixed(2)}</p>
-
-                                <div className="flex space-x-2">
-                                    <button
-                                        onClick={() => startEditProduct(produto)}
-                                        className="flex-1 py-2 px-4 text-sm font-semibold rounded-lg transition bg-blue-400 hover:bg-blue-500 text-white"
-                                    >
-                                        Editar
-                                    </button>
-                                    <button
-                                        onClick={() => handleDeleteProduct(produto._id)}
-                                        className="py-2 px-4 text-sm font-semibold rounded-lg transition bg-red-400 hover:bg-red-500 text-white"
-                                    >
-                                        Deletar
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            )}
-        </div>
-    );
-  };
-
+  // ... (Restante dos componentes de Renderização)
   const renderProfessorList = () => {
     return (
         <div className="shadow-lg rounded-xl p-6 border max-w-7xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
             <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>Lista de Professores</h2>
             <div className="flex justify-end mb-4">
-                <button
+                <button 
                     onClick={switchToProfessorAddForm}
                     className="font-semibold py-2 px-4 rounded-lg shadow-md transition transform hover:scale-[1.01]"
                     style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
@@ -1626,7 +1342,6 @@ const ProfessorPainel = () => {
                     + Adicionar Professor
                 </button>
             </div>
-
             {professorIsLoading ? (
                 <p className="text-center py-4">Carregando professores...</p>
             ) : professores.length === 0 ? (
@@ -1651,15 +1366,15 @@ const ProfessorPainel = () => {
                                     ))}
                                 </div>
                                 <div className="flex space-x-2 mt-4">
-                                    <button
+                                    <button 
                                         onClick={() => startEditProfessor(professor)}
                                         className="flex-1 py-2 px-4 text-sm font-semibold rounded-lg transition bg-blue-400 hover:bg-blue-500 text-white"
                                     >
                                         Editar
                                     </button>
-                                    <button
+                                    <button 
                                         onClick={() => handleDeleteProfessor(professor._id, professor.name)}
-                                        className="py-2 px-4 text-sm font-semibold rounded-lg transition bg-red-400 hover:bg-red-500 text-white"
+                                        className="flex-1 py-2 px-4 text-sm font-semibold rounded-lg transition bg-red-400 hover:bg-red-500 text-white"
                                     >
                                         Deletar
                                     </button>
@@ -1671,20 +1386,22 @@ const ProfessorPainel = () => {
             )}
         </div>
     );
-  };
+  }
 
   const renderProfessorForm = () => {
     const isEditing = professorCrudMode === CRUD_MODES.EDIT;
+
     return (
-        <div className="shadow-lg rounded-xl p-6 border max-w-2xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
+        <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
             <h2 className="text-2xl font-semibold mb-6" style={{ color: "#201E1E" }}>
                 {isEditing ? 'Editar Professor' : 'Cadastrar Novo Professor'}
             </h2>
+            
             <form onSubmit={handleSubmitProfessor} className="space-y-6">
                 
                 {/* INFORMAÇÕES BÁSICAS */}
                 <div>
-                    <label htmlFor="name" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Nome Completo</label>
+                    <label htmlFor="name" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Nome do Professor</label>
                     <input
                         type="text"
                         id="name"
@@ -1697,7 +1414,7 @@ const ProfessorPainel = () => {
                 </div>
                 
                 <div>
-                    <label htmlFor="description" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Descrição (Mini-biografia)</label>
+                    <label htmlFor="description" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Descrição/Bio</label>
                     <textarea
                         id="description"
                         name="description"
@@ -1711,7 +1428,7 @@ const ProfessorPainel = () => {
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label htmlFor="email" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>E-mail</label>
+                        <label htmlFor="email" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>E-mail (Login)</label>
                         <input
                             type="email"
                             id="email"
@@ -1722,6 +1439,7 @@ const ProfessorPainel = () => {
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
+                    
                     <div>
                         <label htmlFor="password" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Senha {isEditing ? '(Deixe vazio para não alterar)' : ''}</label>
                         <input
@@ -1734,6 +1452,21 @@ const ProfessorPainel = () => {
                             className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
                         />
                     </div>
+                </div>
+
+                {/* Chave PIX */}
+                <div>
+                    <label htmlFor="pix" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Chave PIX</label>
+                    <input
+                        type="text"
+                        id="pix"
+                        name="pix"
+                        value={professorFormData.pix}
+                        onChange={handleProfessorInputChange}
+                        required
+                        placeholder="CPF, E-mail, Telefone ou Chave Aleatória"
+                        className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
+                    />
                 </div>
 
                 {/* ESPECIALIDADES (AULAS) - MODIFICADO */}
@@ -1773,54 +1506,38 @@ const ProfessorPainel = () => {
                         </button>
                     </div>
                 ))}
+                
                 <button
                     type="button"
                     onClick={handleAddSpecialty}
-                    className="font-semibold py-2 px-4 rounded-lg shadow-md transition text-black border border-dashed border-gray-400 hover:bg-gray-100"
-                    style={{ backgroundColor: "#FFFFFF" }}
+                    className="font-semibold py-2 px-4 rounded-lg shadow-md transition transform hover:scale-[1.01] bg-green-500 hover:bg-green-600 text-white"
                 >
                     + Adicionar Especialidade
                 </button>
-                {/* FIM ESPECIALIDADES */}
 
-                {/* IMAGEM E PIX */}
-                <h3 className="text-xl font-medium pt-4 border-t" style={{ color: "#201E1E" }}>Dados Adicionais</h3>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                        <label htmlFor="pix" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Chave PIX (Obrigatório)</label>
+                {/* UPLOAD E PREVIEW DE IMAGEM */}
+                <div className="pt-4 border-t">
+                    <label className="block text-sm font-medium mb-3" style={{ color: "#201E1E" }}>Foto de Perfil</label>
+                    
+                    {professorFormData.picture ? (
+                        <div className="flex items-center space-x-4">
+                            <img src={professorFormData.picture} alt="Preview do Professor" className="w-24 h-24 object-cover rounded-full border-4 border-blue-500" />
+                            <button
+                                type="button"
+                                onClick={handleRemovePicture}
+                                className="py-2 px-4 text-sm font-semibold rounded-lg transition bg-red-400 hover:bg-red-500 text-white"
+                            >
+                                Remover Imagem
+                            </button>
+                        </div>
+                    ) : (
                         <input
-                            type="text"
-                            id="pix"
-                            name="pix"
-                            value={professorFormData.pix}
-                            onChange={handleProfessorInputChange}
-                            required
-                            placeholder="CPF, E-mail, Telefone, Chave Aleatória"
-                            className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-3 focus:ring-blue-500 focus:border-blue-500"
+                            type="file"
+                            onChange={handlePictureChange}
+                            accept="image/*"
+                            className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                         />
-                    </div>
-                    <div>
-                        <label className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Foto do Perfil</label>
-                        {professorFormData.picture ? (
-                            <div className="flex items-center space-x-4">
-                                <img src={professorFormData.picture} alt="Preview" className="w-16 h-16 object-cover rounded-full border" />
-                                <button
-                                    type="button"
-                                    onClick={handleRemovePicture}
-                                    className="py-1 px-3 text-sm font-semibold rounded-lg transition bg-red-400 hover:bg-red-500 text-white"
-                                >
-                                    Remover Foto
-                                </button>
-                            </div>
-                        ) : (
-                            <input
-                                type="file"
-                                onChange={handlePictureChange}
-                                accept="image/*"
-                                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                            />
-                        )}
-                    </div>
+                    )}
                 </div>
 
                 <div className="flex justify-end space-x-4 pt-6 border-t">
@@ -1842,7 +1559,291 @@ const ProfessorPainel = () => {
             </form>
         </div>
     );
+  }
+
+  const renderAgendamentos = () => {
+    return (
+        <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
+            <h2 className="text-2xl font-semibold mb-4" style={{ color: "#201E1E" }}>Agendamentos Confirmados</h2>
+            {agendamentoIsLoading ? (
+                <p className="text-center py-4">Carregando agendamentos...</p>
+            ) : scheduledClients.length === 0 ? (
+                <p className="text-center py-4">Nenhum agendamento confirmado no momento.</p>
+            ) : (
+                <ul className="space-y-4">
+                    {scheduledClients.map((client, index) => (
+                        <li key={index} className="p-4 border rounded-lg shadow-sm bg-gray-50">
+                            <div className="flex justify-between items-center">
+                                <span className="font-semibold" style={{ color: "#201E1E" }}>{client.clientName}</span>
+                                <span className="text-sm text-gray-600">{client.clientEmail}</span>
+                            </div>
+                            <p className="text-sm mt-1">
+                                <span className="font-medium">Aula:</span> {client.classType}
+                            </p>
+                            <p className="text-sm">
+                                <span className="font-medium">Data/Hora:</span> {new Date(client.date).toLocaleDateString('pt-BR')} às {client.time}
+                            </p>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+  }
+
+  const renderSales = () => {
+      return (
+          <div className="shadow-lg rounded-xl p-6 border max-w-7xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
+              <h2 className="text-2xl font-semibold mb-6" style={{ color: "#201E1E" }}>Histórico de Vendas (Pagamentos)</h2>
+
+              {salesIsLoading ? (
+                  <p className="text-center py-4">Carregando histórico de vendas...</p>
+              ) : sales.length === 0 ? (
+                  <p className="text-center py-4">Nenhuma venda registrada até o momento.</p>
+              ) : (
+                  <div className="overflow-x-auto">
+                      <table className="min-w-full divide-y divide-gray-200">
+                          <thead className="bg-gray-50">
+                              <tr>
+                                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"> ID da Transação </th>
+                                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"> Produto </th>
+                                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"> Valor (R$) </th>
+                                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"> Data </th>
+                              </tr>
+                          </thead>
+                          <tbody className="bg-white divide-y divide-gray-200">
+                              {sales.map((sale) => (
+                                  <tr key={sale._id}>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                                          {sale._id.substring(0, 8)}...
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                          {sale.productName || 'N/A'}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 font-semibold">
+                                          {parseFloat(sale.value).toFixed(2)}
+                                      </td>
+                                      <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                          {new Date(sale.createdAt).toLocaleDateString()}
+                                      </td>
+                                  </tr>
+                              ))}
+                          </tbody>
+                      </table>
+                  </div>
+              )}
+          </div>
+      );
   };
+  
+  // Componente de Configuração Semanal (Sub-componente da Agenda)
+  const renderWeeklyConfig = () => (
+      <>
+          <p className="mb-6 text-gray-600">
+              Defina o padrão semanal de sua disponibilidade (horários de início e fim).
+          </p>
+          <div className="space-y-4">
+              {scheduleFormData.map((dayConfig, index) => (
+                  <div 
+                      key={dayConfig.day} 
+                      className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 rounded-lg transition ${dayConfig.active ? 'bg-blue-50 border border-blue-200' : 'bg-gray-50 border border-gray-200 opacity-60'}`}
+                  >
+                      <div className="flex items-center w-full sm:w-1/4 mb-2 sm:mb-0">
+                          <input 
+                              type="checkbox" 
+                              id={`active-${index}`}
+                              checked={dayConfig.active}
+                              onChange={(e) => handleScheduleChange(index, 'active', e.target.checked)}
+                              className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <label htmlFor={`active-${index}`} className="ml-3 font-semibold text-lg" style={{ color: dayConfig.active ? "#2563EB" : "#4B5563" }}>
+                              {dayConfig.day}
+                          </label>
+                      </div>
+                      <div className="flex gap-4 w-full sm:w-3/4 items-center">
+                          <label className="text-sm font-medium whitespace-nowrap">Início:</label>
+                          <input
+                              type="time"
+                              value={dayConfig.start}
+                              onChange={(e) => handleScheduleChange(index, 'start', e.target.value)}
+                              disabled={!dayConfig.active}
+                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/3"
+                              required={dayConfig.active}
+                          />
+                          <label className="text-sm font-medium whitespace-nowrap">Fim:</label>
+                          <input
+                              type="time"
+                              value={dayConfig.end}
+                              onChange={(e) => handleScheduleChange(index, 'end', e.target.value)}
+                              disabled={!dayConfig.active}
+                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/3"
+                              required={dayConfig.active}
+                          />
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </>
+  );
+
+  // Componente de Configuração de Disponibilidade Mensal (Sub-componente da Agenda)
+  const renderMonthlyAvailability = () => (
+      <>
+          <p className="mb-6 text-gray-600">
+              Gerencie a disponibilidade geral para cada mês do ano. O padrão é **disponível**.
+          </p>
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {MONTHS.map((month, index) => (
+                  <div key={index} className="flex items-center p-3 border rounded-lg bg-gray-50 justify-between">
+                      <span className="font-medium text-gray-700">{month}</span>
+                      <select
+                          value={monthlyAvailability[index] === false ? 'indisponivel' : 'disponivel'}
+                          onChange={(e) => handleMonthlyChange(index, e.target.value === 'disponivel')}
+                          className={`p-2 border rounded-md shadow-sm text-sm ${monthlyAvailability[index] === false ? 'bg-red-100 border-red-300' : 'bg-green-100 border-green-300'}`}
+                      >
+                          <option value="disponivel">Disponível</option>
+                          <option value="indisponivel">Indisponível</option>
+                      </select>
+                  </div>
+              ))}
+          </div>
+      </>
+  );
+
+  // Componente de Configuração de Datas Específicas (Sub-componente da Agenda)
+  const renderSpecificDates = () => (
+      <>
+          <p className="mb-6 text-gray-600">
+              Use para anular o padrão semanal ou mensal em datas específicas (feriados, eventos, etc.).
+          </p>
+
+          <button
+              type="button"
+              onClick={handleSpecificDateAdd}
+              className="font-semibold py-2 px-4 rounded-lg shadow-md transition transform hover:scale-[1.01] bg-green-500 hover:bg-green-600 text-white mb-6"
+          >
+              + Adicionar Data Específica
+          </button>
+          
+          <div className="space-y-4">
+              {specificDates.map((dateConfig, index) => (
+                  <div 
+                      key={index} 
+                      className={`flex flex-col sm:flex-row sm:justify-between sm:items-center p-4 rounded-lg transition border ${dateConfig.active ? 'bg-yellow-50 border-yellow-200' : 'bg-gray-50 border-gray-200 opacity-60'}`}
+                  >
+                      <div className="flex items-center w-full sm:w-1/4 mb-2 sm:mb-0 space-x-2">
+                          <input
+                              type="date"
+                              value={dateConfig.date}
+                              onChange={(e) => handleSpecificDateChange(index, 'date', e.target.value)}
+                              className="p-2 border rounded-md shadow-sm w-full"
+                          />
+                          <button
+                              type="button"
+                              onClick={() => handleSpecificDateRemove(index)}
+                              className="text-red-500 hover:text-red-700 transition"
+                              title="Remover data"
+                          >
+                              &times;
+                          </button>
+                      </div>
+                      
+                      <div className="flex flex-wrap gap-4 w-full sm:w-3/4 items-center mt-2 sm:mt-0">
+                          <div className="flex items-center space-x-2">
+                              <input
+                                  type="checkbox"
+                                  id={`active-specific-${index}`}
+                                  checked={dateConfig.active}
+                                  onChange={(e) => handleSpecificDateChange(index, 'active', e.target.checked)}
+                                  className="h-5 w-5 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                              />
+                              <label htmlFor={`active-specific-${index}`} className="text-sm font-medium">Disponível</label>
+                          </div>
+
+                          <label className="text-sm font-medium">Início:</label>
+                          <input
+                              type="time"
+                              value={dateConfig.start}
+                              onChange={(e) => handleSpecificDateChange(index, 'start', e.target.value)}
+                              disabled={!dateConfig.active}
+                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/4"
+                              required={dateConfig.active}
+                          />
+
+                          <label className="text-sm font-medium">Fim:</label>
+                          <input
+                              type="time"
+                              value={dateConfig.end}
+                              onChange={(e) => handleSpecificDateChange(index, 'end', e.target.value)}
+                              disabled={!dateConfig.active}
+                              className="p-2 border rounded-md shadow-sm w-full sm:w-1/4"
+                              required={dateConfig.active}
+                          />
+                      </div>
+                  </div>
+              ))}
+          </div>
+      </>
+  );
+
+  // Componente Principal de Configuração de Agenda (Mantido)
+  const renderAgendaConfiguration = () => {
+    let content;
+    switch (agendaConfigMode) {
+        case AGENDA_CONFIG_MODES.PADRAO_SEMANAL:
+            content = renderWeeklyConfig();
+            break;
+        case AGENDA_CONFIG_MODES.DISPONIBILIDADE_MENSAL:
+            content = renderMonthlyAvailability();
+            break;
+        case AGENDA_CONFIG_MODES.DATAS_ESPECIFICAS:
+            content = renderSpecificDates();
+            break;
+        default:
+            content = <p>Selecione um modo de configuração.</p>;
+    }
+
+    return (
+        <div className="shadow-lg rounded-xl p-6 border max-w-7xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
+            <h2 className="text-2xl font-semibold mb-6" style={{ color: "#201E1E" }}>Configuração de Agenda: {user?.name}</h2>
+            
+            <div className="flex flex-wrap gap-3 mb-6 border-b pb-4">
+                <button
+                    onClick={() => setAgendaConfigMode(AGENDA_CONFIG_MODES.PADRAO_SEMANAL)}
+                    className={`font-semibold py-2 px-4 rounded-lg transition ${agendaConfigMode === AGENDA_CONFIG_MODES.PADRAO_SEMANAL ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                >
+                    Padrão Semanal
+                </button>
+                <button
+                    onClick={() => setAgendaConfigMode(AGENDA_CONFIG_MODES.DISPONIBILIDADE_MENSAL)}
+                    className={`font-semibold py-2 px-4 rounded-lg transition ${agendaConfigMode === AGENDA_CONFIG_MODES.DISPONIBILIDADE_MENSAL ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                >
+                    Disponibilidade Mensal
+                </button>
+                <button
+                    onClick={() => setAgendaConfigMode(AGENDA_CONFIG_MODES.DATAS_ESPECIFICAS)}
+                    className={`font-semibold py-2 px-4 rounded-lg transition ${agendaConfigMode === AGENDA_CONFIG_MODES.DATAS_ESPECIFICAS ? 'bg-blue-500 text-white' : 'bg-gray-200 text-gray-700 hover:bg-gray-300'}`}
+                >
+                    Datas Específicas
+                </button>
+            </div>
+
+            <form onSubmit={handleScheduleSubmit}>
+                {content}
+                
+                <div className="flex justify-end mt-6 pt-4 border-t">
+                    <button
+                        type="submit"
+                        className="font-semibold py-3 px-6 rounded-lg shadow-md transition transform hover:scale-[1.01]"
+                        style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
+                    >
+                        Salvar Configurações
+                    </button>
+                </div>
+            </form>
+        </div>
+    );
+  }
 
   const renderPackageSelection = () => {
     return (
@@ -1855,16 +1856,16 @@ const ProfessorPainel = () => {
             ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {professores.map(professor => (
-                        <div
-                            key={professor._id}
+                        <div 
+                            key={professor._id} 
                             className={`p-4 border rounded-lg cursor-pointer transition ${selectedProfessorsForPackage.includes(professor._id) ? 'bg-blue-100 border-blue-500 shadow-md' : 'bg-white border-gray-300 hover:border-blue-300'}`}
                             onClick={() => toggleProfessorSelection(professor._id)}
                         >
                             <div className="flex items-center">
-                                <input
+                                <input 
                                     type="checkbox"
                                     checked={selectedProfessorsForPackage.includes(professor._id)}
-                                    onChange={() => {}}
+                                    onChange={() => {}} // No-op, pois o clique já faz o toggle
                                     className="h-5 w-5 text-blue-600 border-gray-300 rounded focus:ring-blue-500 mr-3"
                                 />
                                 <span className="font-semibold" style={{ color: "#201E1E" }}>{professor.name}</span>
@@ -1878,7 +1879,7 @@ const ProfessorPainel = () => {
             )}
 
             <div className="flex justify-end mt-6">
-                <button
+                <button 
                     onClick={handleStartPackageCreation}
                     disabled={selectedProfessorsForPackage.length < 2}
                     className="font-semibold py-3 px-6 rounded-lg shadow-md transition transform hover:scale-[1.01] disabled:opacity-50 disabled:cursor-not-allowed"
@@ -1890,17 +1891,18 @@ const ProfessorPainel = () => {
         </div>
     );
   };
-
-  const renderPackageCreation = () => {
-    // Filtra os professores selecionados para exibir apenas eles no formulário
+  
+  const renderPackageForm = () => {
     const professorsInPackage = professores.filter(p => selectedProfessorsForPackage.includes(p._id));
 
     return (
         <div className="shadow-lg rounded-xl p-6 border max-w-4xl mx-auto" style={{ backgroundColor: "#FFFFFF", borderColor: "#A9CBD2" }}>
-            <h2 className="text-2xl font-semibold mb-6" style={{ color: "#201E1E" }}>2. Detalhes do Novo Pacote</h2>
-            <form onSubmit={handlePackageSubmit} className="space-y-6">
-                {/* INFORMAÇÕES DO PACOTE */}
-                <h3 className="text-xl font-medium pt-4 border-t" style={{ color: "#201E1E" }}>Informações Básicas</h3>
+            <h2 className="text-2xl font-semibold mb-6" style={{ color: "#201E1E" }}>2. Configuração do Pacote</h2>
+            
+            <form onSubmit={handleSubmitPackage} className="space-y-6">
+                
+                {/* Detalhes do Pacote */}
+                <h3 className="text-xl font-medium pt-4 border-t" style={{ color: "#201E1E" }}>Detalhes Básicos</h3>
                 <div>
                     <label htmlFor="packageName" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Nome do Pacote</label>
                     <input
@@ -1914,7 +1916,7 @@ const ProfessorPainel = () => {
                     />
                 </div>
                 <div>
-                    <label htmlFor="description" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Descrição (Mínimo 10 caracteres)</label>
+                    <label htmlFor="description" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Descrição do Pacote</label>
                     <textarea
                         id="description"
                         name="description"
@@ -1926,7 +1928,7 @@ const ProfessorPainel = () => {
                     />
                 </div>
                 <div>
-                    <label htmlFor="price" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Preço Total do Pacote (R$)</label>
+                    <label htmlFor="price" className="block text-sm font-medium mb-1" style={{ color: "#201E1E" }}>Valor Total do Pacote (R$)</label>
                     <input
                         type="number"
                         id="price"
@@ -1940,9 +1942,10 @@ const ProfessorPainel = () => {
                     />
                 </div>
 
-                {/* DETALHES DAS AULAS */}
-                <h3 className="text-xl font-medium pt-4 border-t" style={{ color: "#201E1E" }}>Distribuição de Aulas por Professor</h3>
+                {/* Aulas por Professor */}
+                <h3 className="text-xl font-medium pt-4 border-t" style={{ color: "#201E1E" }}>Aulas por Professor</h3>
                 <p className="text-sm text-gray-600 mb-4">Defina quantas aulas cada professor selecionado contribuirá para este pacote.</p>
+                
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {professorsInPackage.map(professor => {
                         const profId = professor._id;
@@ -1981,7 +1984,7 @@ const ProfessorPainel = () => {
                         className="font-semibold py-3 px-6 rounded-lg shadow-md transition transform hover:scale-[1.01]"
                         style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
                     >
-                        Finalizar Cadastro do Pacote
+                        Criar Pacote
                     </button>
                 </div>
             </form>
@@ -1989,111 +1992,121 @@ const ProfessorPainel = () => {
     );
   };
   
+  // Renderizador de Seções
+  const renderProfessorCrud = () => {
+    if (professorCrudMode === CRUD_MODES.ADD || professorCrudMode === CRUD_MODES.EDIT) {
+        return renderProfessorForm();
+    }
+    return renderProfessorList();
+  }
+
+  const renderProductCrud = () => {
+    if (productCrudMode === CRUD_MODES.ADD || productCrudMode === CRUD_MODES.EDIT) {
+        return renderProductForm();
+    }
+    return renderProductList();
+  }
+  
+  const renderPackageCrud = () => {
+    if (packageCreationMode === CRUD_MODES.ADD) {
+        return renderPackageForm();
+    }
+    return renderPackageSelection();
+  }
+
+  const renderContent = () => {
+      switch (currentSection) {
+          case SECTION_MODES.AGENDAMENTOS:
+              return renderAgendamentos();
+          case SECTION_MODES.PRODUTOS:
+              return renderProductCrud();
+          case SECTION_MODES.PROFESSORES:
+              return renderProfessorCrud();
+          case SECTION_MODES.VENDAS:
+              return renderSales();
+          case SECTION_MODES.AGENDA:
+              return renderAgendaConfiguration();
+          case SECTION_MODES.PACOTES:
+              return renderPackageCrud();
+          default:
+              return <h2 className="text-2xl font-semibold">Bem-vindo(a) ao Painel, {user.name}!</h2>;
+      }
+  };
+  
   const renderPackageSuccessModal = () => {
     if (!showPackageSuccessModal) return null;
 
     return (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-            <div className="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full text-center">
-                <svg className="w-16 h-16 text-green-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
-                </svg>
-                <h3 className="text-xl font-bold mb-2" style={{ color: "#201E1E" }}>Sucesso!</h3>
-                <p className="text-gray-600 mb-6">{packageSuccessMessage}</p>
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50 flex items-center justify-center">
+            <div className="bg-white p-6 rounded-xl shadow-2xl max-w-sm w-full text-center">
+                <div className="text-green-500 text-6xl mb-4">✔</div>
+                <h3 className="text-2xl font-bold mb-4" style={{ color: "#201E1E" }}>Sucesso!</h3>
+                <p className="mb-6 text-gray-700">{packageSuccessMessage}</p>
                 <button
                     onClick={() => setShowPackageSuccessModal(false)}
                     className="w-full font-semibold py-3 px-6 rounded-lg shadow-md transition transform hover:scale-[1.01]"
                     style={{ backgroundColor: "#9AC3CD", color: "#201E1E" }}
                 >
-                    Entendido
+                    Fechar
                 </button>
             </div>
         </div>
     );
   };
-  
-  const renderPackageCrud = () => {
-    if (packageCreationMode === CRUD_MODES.ADD) {
-        return renderPackageCreation();
-    }
-    return renderPackageSelection();
-  }
-
-  // FUNÇÃO PRINCIPAL DE RENDERIZAÇÃO
-  const renderContent = () => {
-    switch (currentSection) {
-        case SECTION_MODES.AGENDAMENTOS:
-            return renderAgendamentos();
-        case SECTION_MODES.PRODUTOS:
-            return renderProductCrud();
-        case SECTION_MODES.PROFESSORES:
-            return renderProfessorCrud();
-        case SECTION_MODES.VENDAS:
-            return renderSalesList();
-        case SECTION_MODES.AGENDA:
-            return renderAgendaConfiguration();
-        case SECTION_MODES.PACOTES:
-            return renderPackageCrud();
-        default:
-            return renderAgendamentos();
-    }
-  };
-
-  // Se não estiver logado, exibe a tela de login.
-  if (!isLoggedIn) {
-      return <LoginScreen onLoginSuccess={handleLoginSuccess} />;
-  }
 
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#F9FBEE" }}>
-        {/* CABEÇALHO/NAVEGAÇÃO (MODIFICADO) */}
-        <div className="bg-white shadow-md">
+        
+        {/* BARRA DE NAVEGAÇÃO */}
+        <div className="shadow-lg" style={{ backgroundColor: "#FFFFFF" }}>
             <div className="max-w-7xl mx-auto p-4 flex flex-col sm:flex-row justify-between items-center">
-                <h1 className="text-2xl font-bold" style={{ color: "#201E1E" }}>
-                    Painel {user?.role === 'adm' ? 'Administrativo' : user?.name}
+                <h1 className="text-2xl font-bold mb-4 sm:mb-0" style={{ color: "#201E1E" }}>
+                    Painel {user.role === 'adm' ? 'ADM' : 'Professor'}
                 </h1>
-                <div className="flex flex-wrap gap-2 mt-4 sm:mt-0 justify-center">
-                    {/* BOTÕES DE NAVEGAÇÃO BÁSICOS (PARA TODOS, INCLUSIVE NÃO-ADM) */}
-                    <button
-                        className="font-semibold py-3 px-6 rounded-lg shadow-md transition"
+                
+                <div className="flex flex-wrap justify-center sm:justify-end gap-2">
+                    
+                    {/* Botões Comuns */}
+                    <button 
+                        className="font-semibold py-3 px-6 rounded-lg shadow-md transition" 
                         style={{ backgroundColor: currentSection === SECTION_MODES.AGENDAMENTOS ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
                         onClick={() => setCurrentSection(SECTION_MODES.AGENDAMENTOS)}
                     >
                         Agendamentos
                     </button>
-                    <button
-                        className="font-semibold py-3 px-6 rounded-lg shadow-md transition"
+                    <button 
+                        className="font-semibold py-3 px-6 rounded-lg shadow-md transition" 
                         style={{ backgroundColor: currentSection === SECTION_MODES.AGENDA ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
                         onClick={switchToAgendaConfig}
                     >
                         Minha Agenda
                     </button>
 
-                    {/* BOTÕES DE NAVEGAÇÃO EXCLUSIVOS DO ADM */}
-                    {user?.role === 'adm' && (
+                    {/* Botões de ADM */}
+                    {user.role === 'adm' && (
                         <>
-                            <button
-                                className="font-semibold py-3 px-6 rounded-lg shadow-md transition"
-                                style={{ backgroundColor: currentSection === SECTION_MODES.PROFESSORES ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
-                                onClick={switchToProfessorList}
-                            >
-                                Gerenciar Professores
-                            </button>
-                            <button
-                                className="font-semibold py-3 px-6 rounded-lg shadow-md transition"
+                            <button 
+                                className="font-semibold py-3 px-6 rounded-lg shadow-md transition" 
                                 style={{ backgroundColor: currentSection === SECTION_MODES.PRODUTOS ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
                                 onClick={switchToProductList}
                             >
-                                Gerenciar Produtos
+                                Produtos
                             </button>
-                            <button
+                            <button 
+                                className="font-semibold py-3 px-6 rounded-lg shadow-md transition" 
+                                style={{ backgroundColor: currentSection === SECTION_MODES.PROFESSORES ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
+                                onClick={switchToProfessorList}
+                            >
+                                Professores
+                            </button>
+                            <button 
                                 className="font-semibold py-3 px-6 rounded-lg shadow-md transition"
                                 style={{ backgroundColor: currentSection === SECTION_MODES.PACOTES ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
                                 onClick={switchToPackageCreation}
                             >
                                 Criar Pacotes
                             </button>
-                            <button
+                            <button 
                                 className="font-semibold py-3 px-6 rounded-lg shadow-md transition"
                                 style={{ backgroundColor: currentSection === SECTION_MODES.VENDAS ? "#A9CBD2" : "#9AC3CD", color: "#201E1E" }}
                                 onClick={() => setCurrentSection(SECTION_MODES.VENDAS)}
