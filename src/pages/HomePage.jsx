@@ -450,19 +450,13 @@ const HomePage = () => {
 
     if (method === "Cartão") {
         // Ação para Cartão de Crédito
-        if (isProfessorPurchase) {
-            // Abre o formulário de Cartão de Crédito APENAS para Agendamento de Aula
-            setShowPaymentMethodModal(false);
-            setShowCreditCardModal(true);
-        } else {
-             // PIX para Produto/Pacote: USARIA OUTRA ROTA. Por simplicidade, MANTEM O MOCK
-            setIsProcessingPayment(true);
-            setTimeout(() => {
-                setIsProcessingPayment(false);
-                alert(`✅ Sucesso! Processando pagamento de ${item} via Cartão (MOCK).`);
-                handleCloseCheckout();
-            }, 1500);
-        }
+        // *** ALTERAÇÃO ***
+        // Ambos os fluxos (Professor e Produto/Pacote) agora abrem o modal do cartão.
+        // A lógica de qual endpoint chamar será movida para o 'handleCardPaymentSubmit'.
+        setShowPaymentMethodModal(false);
+        setShowCreditCardModal(true);
+        
+        // A lógica antiga de MOCK para produto foi removida.
         return;
     }
 
@@ -582,83 +576,165 @@ const HomePage = () => {
     }
   };
   
-  // --- FUNÇÃO PARA ENVIAR PAGAMENTO COM CARTÃO DE CRÉDITO ---
+  // ====================================================================
+  // *** FUNÇÃO ATUALIZADA PARA LIDAR COM OS DOIS FLUXOS (AULA E PRODUTO) ***
+  // ====================================================================
   const handleCardPaymentSubmit = async (e) => {
     e.preventDefault();
     setIsProcessingPayment(true);
 
     const isProfessorPurchase = !!selectedProfessor && !!selectedSpecialty;
-    const value = parseFloat(selectedSpecialty?.pricePerClass || 0);
-
-    if (!isProfessorPurchase) {
-        alert("Erro interno: Pagamento com Cartão de Crédito só é permitido para Agendamento de Aula neste fluxo.");
-        setIsProcessingPayment(false);
-        return;
-    }
-
-    // Validação mínima dos campos do cartão e do titular (ajuste conforme necessário)
+    
+    // Validação mínima dos campos do cartão e do titular (comum a ambos os fluxos)
     if (!cardData.creditCardNumber || !cardData.creditCardCcv || !cardData.creditCardHolderName || !cardData.creditCardExpiryMonth || !cardData.creditCardExpiryYear || !cardData.holderPostalCode || !cardData.holderAddressNumber) {
         alert("❌ ERRO: Por favor, preencha todos os dados do Cartão e do Titular (Antifraude).");
         setIsProcessingPayment(false);
         return;
     }
     
-    // Dados obrigatórios para a rota de backend
-    const cardRequestData = {
-        name: buyerData.name,
-        email: buyerData.email,
-        cpfCnpj: buyerData.cpf,
-        mobilePhone: buyerData.phone, // Opcional, mas útil
-        value: value, 
+    // ==================================================
+    // FLUXO 1: AGENDAMENTO DE AULA (Existente)
+    // ==================================================
+    if (isProfessorPurchase) {
+        const value = parseFloat(selectedSpecialty?.pricePerClass || 0);
+
+        // Dados obrigatórios para a rota de backend
+        const cardRequestData = {
+            name: buyerData.name,
+            email: buyerData.email,
+            cpfCnpj: buyerData.cpf,
+            mobilePhone: buyerData.phone, // Opcional, mas útil
+            value: value, 
+            
+            // Dados do Cartão
+            creditCardNumber: cardData.creditCardNumber.replace(/\s/g, ''), // Remove espaços
+            creditCardBrand: cardData.creditCardBrand || "VISA", // MOCK/ASSUMIDO
+            creditCardCcv: cardData.creditCardCcv,
+            creditCardHolderName: cardData.creditCardHolderName,
+            creditCardExpiryMonth: cardData.creditCardExpiryMonth,
+            creditCardExpiryYear: cardData.creditCardExpiryYear,
+
+            // Dados do Titular (Antifraude)
+            holderName: cardData.holderName || buyerData.name,
+            holderEmail: cardData.holderEmail || buyerData.email,
+            holderCpfCnpj: cardData.holderCpfCnpj || buyerData.cpf,
+            holderPostalCode: cardData.holderPostalCode,
+            holderAddressNumber: cardData.holderAddressNumber
+        };
         
-        // Dados do Cartão
-        creditCardNumber: cardData.creditCardNumber.replace(/\s/g, ''), // Remove espaços
-        creditCardBrand: "VISA", // MOCK/ASSUMIDO - idealmente viria de uma lib ou input
-        creditCardCcv: cardData.creditCardCcv,
-        creditCardHolderName: cardData.creditCardHolderName,
-        creditCardExpiryMonth: cardData.creditCardExpiryMonth,
-        creditCardExpiryYear: cardData.creditCardExpiryYear,
+        try {
+            const response = await axios.post(
+                'https://backendagenda-paf6.onrender.com/payperclass-creditcard', 
+                cardRequestData
+            );
 
-        // Dados do Titular (Antifraude)
-        holderName: cardData.holderName || buyerData.name,
-        holderEmail: cardData.holderEmail || buyerData.email,
-        holderCpfCnpj: cardData.holderCpfCnpj || buyerData.cpf,
-        holderPostalCode: cardData.holderPostalCode,
-        holderAddressNumber: cardData.holderAddressNumber
-    };
-    
-    try {
-        const response = await axios.post(
-            'https://backendagenda-paf6.onrender.com/payperclass-creditcard', 
-            cardRequestData
-        );
+            if (response.data.success) {
+                // ATUALIZAÇÃO: Redireciona direto para /agenda COM DADOS
+                alert(`✅ Sucesso! Pagamento via Cartão concluído. Status: ${response.data.status}. Redirecionando para a agenda.`);
+                
+                const professorState = selectedProfessor;
+                const specialtyState = selectedSpecialty;
 
-        if (response.data.success) {
-            // ATUALIZAÇÃO: Redireciona direto para /agenda COM DADOS
-            alert(`✅ Sucesso! Pagamento via Cartão concluído. Status: ${response.data.status}. Redirecionando para a agenda.`);
-            
-            const professorState = selectedProfessor;
-            const specialtyState = selectedSpecialty;
-
-            handleCloseCheckout(); // Limpa tudo e fecha modais
-            
-            // Redireciona COM OS DADOS CAPTURADOS
-            navigate('/agenda', { 
-                state: { 
-                    professor: professorState, 
-                    specialty: specialtyState 
-                } 
-            }); 
-            
-        } else {
-            throw new Error(response.data.errorDetail || "Pagamento recusado ou erro desconhecido.");
+                handleCloseCheckout(); // Limpa tudo e fecha modais
+                
+                // Redireciona COM OS DADOS CAPTURADOS
+                navigate('/agenda', { 
+                    state: { 
+                        professor: professorState, 
+                        specialty: specialtyState 
+                    } 
+                }); 
+                
+            } else {
+                throw new Error(response.data.errorDetail || "Pagamento recusado ou erro desconhecido.");
+            }
+        } catch (error) {
+            console.error("Erro ao processar Cartão de Crédito (Aula):", error.response?.data || error.message);
+            const errorMessage = error.response?.data?.errorDetail || "Erro ao processar pagamento. Verifique os dados do cartão e do titular.";
+            alert(`❌ Erro no Pagamento com Cartão: ${errorMessage}`);
+        } finally {
+            setIsProcessingPayment(false);
         }
-    } catch (error) {
-        console.error("Erro ao processar Cartão de Crédito:", error.response?.data || error.message);
-        const errorMessage = error.response?.data?.errorDetail || "Erro ao processar pagamento. Verifique os dados do cartão e do titular.";
-        alert(`❌ Erro no Pagamento com Cartão: ${errorMessage}`);
-    } finally {
-        setIsProcessingPayment(false);
+        
+    // ==================================================
+    // FLUXO 2: COMPRA DE PRODUTO/PACOTE (Novo)
+    // ==================================================
+    } else {
+        const item = selectedProduct || selectedPackage;
+        
+        if (!item) {
+            alert("Erro interno: Nenhum produto ou pacote selecionado para pagamento com cartão.");
+            setIsProcessingPayment(false);
+            return;
+        }
+
+        // Monta o objeto EXATAMENTE como a rota '/buyProductWithCreditCard' espera
+        const productCardRequestData = {
+            // 1. Chave 'product'
+            product: {
+                name: item.name || item.packageName,
+                value: item.price,
+                CEP: item.CEP || "95010010", // Mock CEP de Origem se não existir
+                weight: item.weight || 1.0, // Mock peso
+                height: item.height || 10, // Mock altura
+                width: item.width || 10, // Mock largura
+                frete: item.frete || false, // Mock frete
+            },
+            
+            // 2. Chave 'buyerData'
+            buyerData: {
+                name: buyerData.name,
+                email: buyerData.email,
+                cpfCnpj: buyerData.cpf, // Backend espera 'cpfCnpj'
+                mobilePhone: buyerData.phone,
+                address: buyerData.address,
+                cepDestino: buyerData.postalCode, // Backend espera 'cepDestino'
+                // O 'addressNumber' do comprador não é coletado, o do *titular* (antifraude) é.
+            },
+            
+            // 3. Chave 'cardData' (Contém dados do cartão e dados do titular para antifraude)
+            cardData: {
+                // Dados do Cartão
+                creditCardHolderName: cardData.creditCardHolderName,
+                creditCardNumber: cardData.creditCardNumber.replace(/\s/g, ''),
+                creditCardExpiryMonth: cardData.creditCardExpiryMonth,
+                creditCardExpiryYear: cardData.creditCardExpiryYear,
+                ccv: cardData.creditCardCcv,
+                creditCardBrand: cardData.creditCardBrand || "VISA", // (Assumido)
+
+                // Dados do Titular (Antifraude) - O backend usa '||' para fallback
+                holderName: cardData.holderName || buyerData.name,
+                holderEmail: cardData.holderEmail || buyerData.email,
+                holderCpfCnpj: cardData.holderCpfCnpj || buyerData.cpf,
+                holderPostalCode: cardData.holderPostalCode,
+                holderAddressNumber: cardData.holderAddressNumber
+            },
+            
+            // 4. Chave 'installments'
+            installments: 1 // Padrão de 1 parcela conforme controller
+        };
+
+        try {
+            const response = await axios.post(
+                'https://backendagenda-paf6.onrender.com/buyProductWithCreditCard', 
+                productCardRequestData
+            );
+
+            if (response.data.success) {
+                alert(`✅ Sucesso! Pagamento via Cartão concluído. Status: ${response.data.status}.`);
+                // Para produto, apenas fechamos o checkout
+                handleCloseCheckout(); 
+                
+            } else {
+                throw new Error(response.data.errorDetail || "Pagamento recusado ou erro desconhecido.");
+            }
+        } catch (error) {
+            console.error("Erro ao processar Cartão de Crédito (Produto):", error.response?.data || error.message);
+            const errorMessage = error.response?.data?.errorDetail || "Erro ao processar pagamento. Verifique os dados do cartão e do titular.";
+            alert(`❌ Erro no Pagamento com Cartão: ${errorMessage}`);
+        } finally {
+            setIsProcessingPayment(false);
+        }
     }
   };
 
@@ -1186,14 +1262,25 @@ const HomePage = () => {
   };
   
   // ====================================================================
-  // NOVO COMPONENTE AUXILIAR: Modal de Formulário do Cartão de Crédito
-  // (Apenas para Agendamento de Aula)
+  // *** COMPONENTE ATUALIZADO PARA LIDAR COM OS DOIS FLUXOS (AULA E PRODUTO) ***
   // ====================================================================
   const CreditCardModal = ({ isOpen, onClose, cardData, onInputChange, onSubmit, isProcessing }) => {
     if (!isOpen) return null;
 
-    const itemDescription = `${selectedProfessor?.name} (${selectedSpecialty?.typeDance})`;
-    const itemPrice = parseFloat(selectedSpecialty?.pricePerClass || 0).toFixed(2);
+    // *** ATUALIZAÇÃO ***
+    // Verifica qual fluxo está ativo para exibir os dados corretos
+    const isProfessorFlow = !!selectedProfessor;
+    
+    const itemDescription = isProfessorFlow
+        ? `${selectedProfessor?.name} (${selectedSpecialty?.typeDance})`
+        : (selectedPackage?.packageName || selectedProduct?.name);
+            
+    const itemPrice = parseFloat(
+        selectedSpecialty?.pricePerClass || 
+        selectedPackage?.price || 
+        selectedProduct?.price || 
+        0
+    ).toFixed(2);
     
     // Funções auxiliares para formatação de campos (Exemplo)
     const formatCardNumber = (value) => {
@@ -1228,13 +1315,20 @@ const HomePage = () => {
             &times;
           </button>
           
+          {/* *** ATUALIZAÇÃO *** Exibe os dados do item (Aula ou Produto) */}
           <div className="mb-6 p-4 border rounded-lg bg-gray-50">
             <p className="mb-2">
                 Item: <span className="font-semibold">{itemDescription}</span>
             </p>
             <p className="text-xl font-extrabold text-blue-500">
-                Valor Total: R$ {itemPrice}
+                {/* *** ATUALIZAÇÃO *** Mostra 'Valor Base' para produto */}
+                {isProfessorFlow ? "Valor Total: " : "Valor Base: "} 
+                R$ {itemPrice}
             </p>
+            {/* *** ATUALIZAÇÃO *** Adiciona aviso de frete para produto/pacote */}
+            {!isProfessorFlow && (
+                 <p className="text-sm text-gray-500 mt-1">O valor final (com frete, se aplicável) será calculado e processado.</p>
+            )}
           </div>
           
           <form onSubmit={onSubmit} className="space-y-6">
@@ -1329,6 +1423,16 @@ const HomePage = () => {
                     name="holderCpfCnpj"
                     placeholder={`CPF/CNPJ do Titular (Padrão: ${buyerData.cpf})`}
                     value={cardData.holderCpfCnpj}
+                    onChange={onInputChange}
+                    className="border rounded-lg p-3 w-full"
+                    disabled={isProcessing}
+                />
+                {/* NOVO: Campo de Email do Titular (usado pelo controller do produto) */}
+                <input
+                    type="email"
+                    name="holderEmail"
+                    placeholder={`Email do Titular (Padrão: ${buyerData.email})`}
+                    value={cardData.holderEmail}
                     onChange={onInputChange}
                     className="border rounded-lg p-3 w-full"
                     disabled={isProcessing}
@@ -1542,8 +1646,10 @@ const HomePage = () => {
                         // Se for fluxo de aula, não exibe Endereço e CEP
                         if (isProfessorFlow && (field === "address" || field === "postalCode")) return null;
                         
-                        // Se for fluxo de produto, o telefone é opcional.
-                        if (!isProfessorFlow && field === "phone") return null;
+                        // *** ALTERAÇÃO ***
+                        // O campo 'phone' agora é exibido em ambos os fluxos, pois é usado
+                        // para a criação do cliente no Asaas em todos os cenários de produto (PIX e Cartão).
+                        // A linha que o ocultava ( `if (!isProfessorFlow && field === "phone") return null;` ) foi REMOVIDA.
 
                         return (
                           <input
@@ -1554,7 +1660,7 @@ const HomePage = () => {
                                 field === 'name' ? 'Nome Completo*' : 
                                 field === 'email' ? 'E-mail*' : 
                                 field === 'cpf' ? 'CPF*' : 
-                                field === 'phone' ? 'Telefone' : 
+                                field === 'phone' ? 'Telefone' : // Opcional (sem *) mas coletado
                                 field === 'address' ? 'Endereço Completo (Rua, Número, Bairro)*' :
                                 'CEP*' // postalCode
                             }
@@ -1619,7 +1725,7 @@ const HomePage = () => {
         onClose={handleCloseCheckout}
         cardData={cardData}
         onInputChange={handleCardInputChange}
-        onSubmit={handleCardPaymentSubmit}
+        onSubmit={handleCardPaymentSubmit} // Esta função agora lida com AMBOS os fluxos
         isProcessing={isProcessingPayment}
       />
     </div>
